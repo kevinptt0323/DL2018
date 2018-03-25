@@ -12,7 +12,7 @@ def weights_init(m):
     if type(m) == nn.Conv2d:
         nn.init.kaiming_uniform(m.weight.data)
         
-use_cuda = torch.cuda.is_available() and False
+use_cuda = torch.cuda.is_available()
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
@@ -36,6 +36,10 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 
 net = ResNet(BasicBlock, 3, 10) # ResNet20
 
+if use_cuda:
+    net.cuda()
+    net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
+
 optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[81,122], gamma=0.1)
 criterion = nn.CrossEntropyLoss()
@@ -47,6 +51,9 @@ def train(epoch):
     train_loss = 0
     correct = 0
     total = 0
+    lr = 0
+    for param_group in optimizer.param_groups:
+        lr = param_group['lr']
     progress = tqdm(enumerate(trainloader), total=391)
     for batch_idx, (inputs, targets) in progress:
         if use_cuda:
@@ -63,11 +70,9 @@ def train(epoch):
         total += targets.size(0)
         correct += predicted.eq(targets.data).cpu().sum()
 
-        for param_group in optimizer.param_groups:
-            lr = param_group['lr']
-
         progress.set_description('Loss: %.6f | Acc: %.3f%% (%d/%d) | LR: %g'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, lr))
     
-for epoch in range(1):
+for epoch in range(10):
+    scheduler.step()
     train(epoch)
