@@ -24,6 +24,27 @@ class BasicBlock(nn.Module):
         out = F.relu(out)
         return out
 
+class PreActBlock(nn.Module):
+    def __init__(self, in_channel, out_channel, stride=1):
+        super(PreActBlock, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_channel)
+        self.conv1 = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channel)
+        self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False)
+
+        self.shortcut = nn.Sequential()
+        if in_channel != out_channel:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channel)
+            )
+
+    def forward(self, x):
+        out = self.conv1(F.relu(self.bn1(x)))
+        out = self.conv2(F.relu(self.bn2(out)))
+        out += self.shortcut(x)
+        return out
+
 class ResNet(nn.Module):
     def __init__(self, block, num_blocks, num_classes):
         super(ResNet, self).__init__()
