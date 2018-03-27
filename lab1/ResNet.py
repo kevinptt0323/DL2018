@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BasicBlock(nn.Module):
+    pre_act = False
     def __init__(self, in_channel, out_channel, stride=1):
         super(BasicBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channel, out_channel, kernel_size=3, stride=stride, padding=1, bias=False)
@@ -25,6 +26,7 @@ class BasicBlock(nn.Module):
         return out
 
 class PreActBlock(nn.Module):
+    pre_act = True
     def __init__(self, in_channel, out_channel, stride=1):
         super(PreActBlock, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_channel)
@@ -32,17 +34,20 @@ class PreActBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(out_channel)
         self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False)
 
-        self.shortcut = nn.Sequential()
         if in_channel != out_channel:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channel)
             )
 
     def forward(self, x):
-        out = self.conv1(F.relu(self.bn1(x)))
+        out = F.relu(self.bn1(x))
+        if hasattr(self, 'shortcut'):
+            shortcut = self.shortcut(out)
+        else:
+            shortcut = x
+        out = self.conv1(out)
         out = self.conv2(F.relu(self.bn2(out)))
-        out += self.shortcut(x)
+        out += shortcut
         return out
 
 class ResNet(nn.Module):
@@ -50,7 +55,10 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(16)
+        if block.pre_act:
+            self.bn1 = nn.Sequential()
+        else:
+            self.bn1 = nn.BatchNorm2d(16)
         self.layer1 = self._make_layer(block, 16, 16, num_blocks, stride=1)
         self.layer2 = self._make_layer(block, 16, 32, num_blocks, stride=2)
         self.layer3 = self._make_layer(block, 32, 64, num_blocks, stride=2)
