@@ -12,7 +12,7 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(out_channel)
         
         self.shortcut = nn.Sequential()
-        if in_channel != out_channel:
+        if stride > 1 or in_channel != out_channel:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(out_channel)
@@ -34,7 +34,7 @@ class PreActBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(out_channel)
         self.conv2 = nn.Conv2d(out_channel, out_channel, kernel_size=3, stride=1, padding=1, bias=False)
 
-        if in_channel != out_channel:
+        if stride > 1 or in_channel != out_channel:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_channel, out_channel, kernel_size=1, stride=stride, bias=False),
             )
