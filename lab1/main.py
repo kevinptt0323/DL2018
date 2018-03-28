@@ -34,12 +34,12 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-# net = ResNet(BasicBlock, 3, len(classes))  # ResNet-20
+net = ResNet(BasicBlock, 3, len(classes))  # ResNet-20
 # net = ResNet(BasicBlock, 9, len(classes))  # ResNet-56
 # net = ResNet(BasicBlock, 18, len(classes)) # ResNet-110
-# net = ResNet(PreActBlock, 3, len(classes))  # ResNet-20
-# net = ResNet(PreActBlock, 9, len(classes))  # ResNet-20
-net = ResNet(PreActBlock, 18, len(classes)) # ResNet-20
+# net = ResNet(PreActBlock, 3, len(classes))  # ResNet-20-preact
+# net = ResNet(PreActBlock, 9, len(classes))  # ResNet-56-preact
+# net = ResNet(PreActBlock, 18, len(classes)) # ResNet-110-preact
 
 if use_cuda:
     net.cuda()
@@ -119,7 +119,7 @@ for epoch in tqdm(range(164), desc='Epoch', ascii=True):
     train(epoch)
     test(epoch)
 
-with open('resnet-110-preact.csv', 'w') as f:
+with open('csv/resnet-20.csv', 'w') as f:
     f.write('epoch,train-loss,train-acc,test-loss,test-acc\n')
     for idx, arr in enumerate(zip(result['train-loss'], result['train-acc'], result['test-loss'], result['test-acc'])):
         f.write('%d,%s\n' % (idx, ','.join(map(str, arr))))
