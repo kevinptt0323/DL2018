@@ -5,10 +5,9 @@ import torch.nn.functional as F
 class DownBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
         super(DownBlock, self).__init__()
-        stride = out_channels // in_channels
 
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size,
-                               padding=(kernel_size-1)//2, stride=stride,
+                               padding=(kernel_size-1)//2, stride=2,
                                **kwargs)
         self.bn1 = nn.BatchNorm2d(out_channels)
 
