@@ -4,8 +4,11 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.autograd import Variable
 
+import numpy as np
 from tqdm import tqdm
 from utils import image_to_tensor, tensor_to_image
+from PIL import Image
+from skimage.measure import compare_psnr
 
 from models import SkipHourglass
 
@@ -14,18 +17,20 @@ if __name__ == '__main__':
     parser.add_argument('--blind', action='store_true', help='blind')
     parser.add_argument('--steps', default=2400, type=int, help='number of steps')
     parser.add_argument('--lr', default=1e-2, type=float, help='learning rate')
-    parser.add_argument('--input', default='images/noise_image.png', type=str, help='number of iterationa')
+    parser.add_argument('--input', default='images/noise_image.png', type=str, help='path to input')
+    parser.add_argument('--input-gt', default='images/noise_GT.png', type=str, help='path to input ground truth')
     parser.add_argument('--no-cuda', action='store_true', help='disable cuda')
     args = parser.parse_args()
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
-    img = image_to_tensor(args.input)
+    truth = np.array(Image.open(args.input_gt))
+    target = image_to_tensor(args.input)
     input_depth = 32
     sigma = 1./30
-    noise = torch.rand([1, input_depth] + list(img.shape[2:])) * 0.1 # U(0, 0.1)
+    noise = torch.rand([1, input_depth] + list(target.shape[2:])) * 0.1 # U(0, 0.1)
     if use_cuda:
-        img = img.cuda()
+        target = target.cuda()
         noise = noise.cuda()
 
     if args.blind:
@@ -49,9 +54,10 @@ if __name__ == '__main__':
     MSE = torch.nn.MSELoss()
 
     net_input = Variable(noise)
-    target = Variable(img)
+    target = Variable(target)
 
-    progress = tqdm(range(args.steps))
+    progress = tqdm(range(1, args.steps+1))
+    psnr = 0
     for step in progress:
         optimizer.zero_grad()
         net_output = net(net_input)
@@ -62,12 +68,13 @@ if __name__ == '__main__':
 
         train_loss = loss.data[0]
 
-        progress.set_description('Loss: %.6f' % train_loss)
+        progress.set_description('Loss: %.6f | PSNR: %.2f dB' % (train_loss, psnr))
 
         if step % 100 == 0:
             if use_cuda:
                 net_output = net_output.cpu()
-            tensor_to_image(net_output.data, 'output2/%04d.png' % step)
+            img = tensor_to_image(net_output.data, 'output2/%04d.png' % step)
+            psnr = compare_psnr(truth, np.array(img))
 
         if use_cuda:
             noise_new = torch.cuda.FloatTensor(noise.shape).normal_(std=sigma)
