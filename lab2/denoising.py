@@ -21,7 +21,7 @@ if __name__ == '__main__':
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     img = image_to_tensor(args.input)
-    input_depth = 3
+    input_depth = 32
     sigma = 1./30
     noise = torch.rand([1, input_depth] + list(img.shape[2:])) * 0.1 # U(0, 0.1)
     if use_cuda:
@@ -30,9 +30,12 @@ if __name__ == '__main__':
 
     if args.blind:
         net = SkipHourglass(input_depth, 3, 
-                            down_channels=[8, 16, 32, 64, 128], 
-                            up_channels=[8, 16, 32, 64, 128],
-                            skip_channels=[0, 0, 0, 4, 4], 
+                            #down_channels=[8, 16, 32, 64, 128],
+                            #up_channels=[8, 16, 32, 64, 128],
+                            #skip_channels=[0, 0, 0, 4, 4],
+                            down_channels=[128, 128, 128, 128, 128],
+                            up_channels=[128, 128, 128, 128, 128],
+                            skip_channels=[4, 4, 4, 4, 4],
                             bias=True,
                             upsample_mode='bilinear')
     else:
@@ -61,12 +64,13 @@ if __name__ == '__main__':
 
         progress.set_description('Loss: %.6f' % train_loss)
 
-        if step % 50 == 0:
+        if step % 100 == 0:
             if use_cuda:
                 net_output = net_output.cpu()
-            tensor_to_image(net_output.data, 'output/%04d.png' % step)
+            tensor_to_image(net_output.data, 'output2/%04d.png' % step)
 
-        noise_new = torch.randn(noise.shape)
         if use_cuda:
-            noise_new = noise_new.cuda()
-        net_input.data += noise_new * sigma
+            noise_new = torch.cuda.FloatTensor(noise.shape).normal_(std=sigma)
+        else:
+            noise_new = torch.randn(noise.shape) * sigma
+        net_input.data += noise_new
