@@ -12,5 +12,6 @@ def tensor_to_image(tensor, filename):
     tensor = tensor.view(tensor.shape[1:])
     tensor_to_pil = torchvision.transforms.Compose([torchvision.transforms.ToPILImage()])
     pil = tensor_to_pil(tensor)
-    pil.save(filename)
+    if filename:
+        pil.save(filename)
     return pil
