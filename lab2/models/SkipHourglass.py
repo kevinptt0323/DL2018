@@ -23,6 +23,7 @@ class DownBlock(nn.Module):
 class UpBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, mode, **kwargs):
         super(UpBlock, self).__init__()
+        self.bn0 = nn.BatchNorm2d(in_channels)
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size,
                                padding=(kernel_size-1)//2, **kwargs)
         self.bn1 = nn.BatchNorm2d(out_channels)
@@ -30,12 +31,10 @@ class UpBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channels, out_channels, 1, **kwargs)
         self.bn2 = nn.BatchNorm2d(out_channels)
 
-        self.upsample = nn.Upsample(scale_factor=2, mode=mode)
-
     def forward(self, x):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn0(x)
+        out = F.relu(self.bn1(self.conv1(out)))
         out = F.relu(self.bn2(self.conv2(out)))
-        out = self.upsample(out)
         return out
 
 class SkipBlock(nn.Module):
@@ -59,6 +58,7 @@ class SkipHourglass(nn.Module):
         super(SkipHourglass, self).__init__()
         
         self.layer_num = len(down_channels)
+        self.upsample_mode = upsample_mode
 
         if not isinstance(down_kernel, list):
             down_kernel = [down_kernel] * self.layer_num
@@ -83,10 +83,9 @@ class SkipHourglass(nn.Module):
                              bias=bias)
             self.down_layers.append(down)
 
-        for i in range(self.layer_num):
             if skip_channels[i] > 0:
-                skip = SkipBlock(down_channels[i], skip_channels[i],
-                                 skip_kernel[i], bias=bias)
+                skip = SkipBlock(prev_ch, skip_channels[i], skip_kernel[i],
+                                 bias=bias)
             else:
                 skip = None
             self.skip_layers.append(skip)
@@ -102,24 +101,24 @@ class SkipHourglass(nn.Module):
             self.up_layers.append(up)
 
         self.out_conv = nn.Conv2d(up_channels[0], out_channels, 1, bias=bias)
-        self.out_bn = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
         out = x
         skips = []
         for i in range(self.layer_num):
-            out = self.down_layers[i](out)
             if not self.skip_layers[i] is None:
                 skip = self.skip_layers[i](out)
             else:
                 skip = None
             skips.append(skip)
+            out = self.down_layers[i](out)
         
         for i in range(self.layer_num-1, -1, -1):
+            out = F.upsample(out, scale_factor=2, mode=self.upsample_mode)
             if not skips[i] is None:
                 out = torch.cat([out, skips[i]], 1)
             out = self.up_layers[i](out)
 
-        out = F.relu(self.out_bn(self.out_conv(out)))
+        out = self.out_conv(out)
         return out
 
