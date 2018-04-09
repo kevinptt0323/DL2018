@@ -29,16 +29,17 @@ if __name__ == '__main__':
     input_size = torch.Size([1, input_depth] + list(origin_image.shape[2:]))
 
     transforms = [
-        ('Image', lambda t: t.clone()),
-        ('Image + Noise', lambda t: add_noise(t, std=25/255.)),
-        ('Image shuffled', random_shuffle),
-        ('U(0 1) noise', white_noise),
+        ('Image', 'origin', lambda t: t.clone()),
+        ('Image + Noise', 'origin-noise', lambda t: add_noise(t, std=25/255.)),
+        ('Image shuffled', 'origin-shuffled', random_shuffle),
+        ('U(0 1) noise', 'noise', white_noise),
     ]
 
     csv_arr = { }
 
-    for transform_name, transform in transforms:
+    for transform_desc, transform_name, transform in transforms:
         target = transform(origin_image)
+        tensor_to_image(target, '%s/%s.png' % (args.output, transform_name))
         noise = torch.FloatTensor(input_size).uniform_(0, 0.1) # U(0, 0.1)
         if use_cuda:
             target = target.cuda()
@@ -74,7 +75,7 @@ if __name__ == '__main__':
 
             train_loss = loss.data[0]
 
-            progress.set_description('%-15s | Loss: %.6f' % (transform_name, train_loss))
+            progress.set_description('%-15s | Loss: %.6f' % (transform_desc, train_loss))
 
             csv_arr[transform_name].append(train_loss)
 
@@ -86,11 +87,11 @@ if __name__ == '__main__':
             net_input.data += noise_new
 
     if args.output:
-        with open(args.output, 'w') as f:
-            f.write(''.join([(',' + name) for name, _ in transforms]))
+        with open(('%s/result.csv' % args.output), 'w') as f:
+            f.write(''.join([(',' + name) for _, name, _ in transforms]))
             f.write('\n')
             for i in range(args.step):
                 f.write('%d' % (i+1))
-                f.write(''.join([(',%f' % csv_arr[name][i]) for name, _ in transforms]))
+                f.write(''.join([(',%f' % csv_arr[name][i]) for _, name, _ in transforms]))
                 f.write('\n')
 

@@ -22,9 +22,10 @@ def add_noise(tensor, std=1):
     return torch.clamp(tensor + noise_new, min=0, max=1)
 
 def random_shuffle(tensor):
-    perm1 = torch.randperm(tensor.shape[2])
-    perm2 = torch.randperm(tensor.shape[3])
-    return tensor[:,:,perm1,:][:,:,:,perm2]
+    data = np.transpose(np.array(tensor[0]), (1, 2, 0)).reshape(-1, 3)
+    np.random.shuffle(data)
+    data = np.transpose(data.reshape([1] + list(tensor.shape[2:]) + [3]), (0, 3, 1, 2))
+    return torch.from_numpy(data)
 
 def white_noise(tensor):
     return torch.FloatTensor(tensor.shape).uniform_()
