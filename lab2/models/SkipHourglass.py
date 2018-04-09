@@ -119,6 +119,6 @@ class SkipHourglass(nn.Module):
                 out = torch.cat([out, skips[i]], 1)
             out = self.up_layers[i](out)
 
-        out = self.out_conv(out)
+        out = F.sigmoid(self.out_conv(out))
         return out
 

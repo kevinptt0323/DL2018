@@ -46,7 +46,6 @@ if __name__ == '__main__':
 
     if use_cuda:
         net.cuda()
-        net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 
     optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     MSE = nn.MSELoss()
