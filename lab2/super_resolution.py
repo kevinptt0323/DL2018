@@ -39,13 +39,13 @@ if __name__ == '__main__':
                         #down_channels=[8, 16, 32, 64, 128],
                         #up_channels=[8, 16, 32, 64, 128],
                         #skip_channels=[0, 0, 0, 4, 4],
-                        down_channels=[64, 64, 64, 64, 64],
-                        up_channels=[64, 64, 64, 64, 64],
+                        down_channels=[128, 128, 128, 128, 128],
+                        up_channels=[128, 128, 128, 128, 128],
                         skip_channels=[4, 4, 4, 4, 4],
                         bias=True,
                         upsample_mode='bilinear')
-    
-    ds_net = Downsampler(3, 4, 'lanczos2', phase=0.5, preserve_size=True) 
+
+    ds_net = Downsampler(3, 4, 'lanczos3', phase=0.5, preserve_size=True)
     if use_cuda:
         net.cuda()
         ds_net.cuda()
