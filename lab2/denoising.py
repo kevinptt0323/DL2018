@@ -74,7 +74,7 @@ if __name__ == '__main__':
                 net_output = net_output.cpu()
             filename = None if args.output is None else '%s/%04d.png' % (args.output, step)
             img = tensor_to_image(net_output.data, filename)
-            if truth:
+            if not truth is None:
                 psnr = compare_psnr(truth, np.array(img))
                 max_psnr = max(max_psnr, psnr)
 
