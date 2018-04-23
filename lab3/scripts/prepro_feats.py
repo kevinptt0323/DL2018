@@ -41,10 +41,8 @@ import skimage.io
 
 import torchvision as tv
 from torchvision import transforms as trn
-preprocess = trn.Compose([
-        #trn.ToTensor(),
-        trn.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+
+normalize = trn.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 
 from models.resnet import ResNet2
 
@@ -53,7 +51,7 @@ def main(params):
   net = tv.models.resnet101()
   net.load_state_dict(torch.load(os.path.join(params['model_root'],params['model']+'.pth')))
   resnet2 = ResNet2(net)
-  #resnet2.cuda()
+  resnet2.cuda()
   resnet2.eval()
 
   imgs = json.load(open(params['input_json'], 'r'))
@@ -72,21 +70,20 @@ def main(params):
   with h5py.File(os.path.join(dir_fc, 'feats_fc.h5')) as file_fc,\
        h5py.File(os.path.join(dir_att, 'feats_att.h5')) as file_att:
     for i, img in enumerate(tqdm(imgs)):
-      print(i)
-      print(img)
-      # load the image
       I = skimage.io.imread(os.path.join(params['images_root'], img['filepath'], img['filename']))
-      # handle grayscale input images
+
       if len(I.shape) == 2:
-        I = I[:,:,np.newaxis]
-        I = np.concatenate((I,I,I), axis=2)
+        I = skimage.color.gray2rgb(I)
 
-      I = I.astype('float32')/255.0
-      I = torch.from_numpy(I.transpose([2,0,1]))#.cuda()
-      I = Variable(preprocess(I), volatile=True)
+      I = torch.from_numpy(I.transpose([2,0,1])).cuda()
+      I = I.float() / 255.0
+
+      I = normalize(I)
+      I = Variable(I, volatile=True)
+
       tmp_fc, tmp_att = resnet2(I, params['att_size'])
-      # write to hdf5
 
+      # write to hdf5
       d_set_fc = file_fc.create_dataset(str(img['cocoid']), 
         (2048,), dtype="float")
       d_set_att = file_att.create_dataset(str(img['cocoid']), 

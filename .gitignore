@@ -108,6 +108,6 @@ venv.bak/
 
 # data
 csv/
-data/
+data
 result/
 *.csv
