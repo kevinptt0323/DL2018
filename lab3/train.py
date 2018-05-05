@@ -35,8 +35,8 @@ def expand_seq_data(data):
     return fc, att, labels
 
 trainloader = DataLoader(data, batch_size=opt.batch_size,
-                         num_workers=1,
-                         collate_fn=expand_seq_data)
+                         # collate_fn=expand_seq_data,
+                         num_workers=1)
 
 opt.dict_size = len(data.dictionary)
 opt.seq_len = data.seq_len
@@ -53,14 +53,20 @@ criterion = utils.LanguageModelCriterion()
 summary = Summary()
 
 iteration = 0
+train_loss = 0
+train_loss_iter = 0
 
 def train():
-    global iteration
+    global iteration, train_loss, train_loss_iter
     loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (fc, att, labels) in loader:
         if use_cuda:
             fc, att, labels = fc.cuda(), att.cuda(), labels.cuda()
-        fc, att, labels = Variable(fc), Variable(att), Variable(labels)
+        fc, att, labels = Variable(fc, requires_grad=False), Variable(att, requires_grad=False), Variable(labels, requires_grad=False)
+        fc = torch.stack([fc]*opt.seq_per_img).view(-1, *fc.shape[1:])
+        att = torch.stack([att]*opt.seq_per_img).view(-1, *att.shape[1:])
+        labels = labels.transpose(1, 0).contiguous().view(-1, *labels.shape[2:])
+
         optimizer.zero_grad()
         outputs = net(fc, att, labels)
         loss = criterion(outputs, labels)
@@ -68,13 +74,16 @@ def train():
         utils.clip_grad_value_(net.parameters(), opt.grad_clip)
         optimizer.step()
 
-        train_loss = loss.data[0]
+        train_loss += loss.data[0]
+        train_loss_iter += 1
 
-        loader.set_description("Loss: {:.6f}".format(train_loss))
+        loader.set_description("Loss: {:.6f}".format(loss.data[0]))
 
         iteration += 1
         if iteration % opt.losses_log_every == 0:
-            summary.add(iteration, 'train-loss', train_loss)
+            summary.add(iteration, 'train-loss', train_loss / train_loss_iter)
+            train_loss = 0
+            train_loss_iter = 0
 
 for epoch in trange(opt.max_epochs, desc='Epoch', ascii=True):
     train()

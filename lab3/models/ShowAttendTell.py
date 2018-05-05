@@ -81,8 +81,7 @@ class ShowAttendTell(nn.Module):
         state = self.init_hidden(fc_feats)
         outputs = []
         i_t_1 = torch.zeros_like(seq[:,0]).long()
-        for i in range(seq.shape[1]):
-            i_t = seq[:,i]
+        for i_t in torch.unbind(seq, dim=1):
             if i_t.data.sum() == 0:
                 break
             x_t_1 = self.word_encoding(i_t_1)

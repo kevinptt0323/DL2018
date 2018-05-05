@@ -8,7 +8,7 @@ class Summary():
 
     def write(self, filename):
         self.result.sort()
-        last_row = self.result[0]-1
+        last_row = self.result[0][0]-1
 
         keys = list(set([log[1] for log in self.result]))
 
@@ -16,7 +16,7 @@ class Summary():
             row_data = [""] + keys
             for row, key, val in self.result:
                 if row != last_row:
-                    f.write(','.join(map(str, row_data)))
+                    f.write(','.join(map(str, row_data)) + '\n')
                     row_data = [""] * (len(keys)+1)
                     row_data[0] = row
                     row = last_row
