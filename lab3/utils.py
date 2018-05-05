@@ -52,7 +52,7 @@ def set_lr(optimizer, lr):
     for group in optimizer.param_groups:
         group['lr'] = lr
 
-def clip_gradient(optimizer, grad_clip):
-    for group in optimizer.param_groups:
-        for param in group['params']:
-            param.grad.data.clamp_(-grad_clip, grad_clip)
+def clip_grad_value_(parameters, clip_value):
+    clip_value = float(clip_value)
+    for p in filter(lambda p: p.grad is not None, parameters):
+        p.grad.data.clamp_(min=-clip_value, max=clip_value)

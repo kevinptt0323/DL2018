@@ -14,7 +14,7 @@ class ShowAttendTellCell(nn.Module):
         self.att_feat_size = opt.att_feat_size
         self.att_hid_size = opt.att_hid_size
 
-        self.rnn = getattr(nn, self.rnn_type.upper())(self.att_feat_size, 
+        self.rnn = getattr(nn, self.rnn_type.upper())(self.input_encoding_size + self.att_feat_size,
                 self.rnn_size, bias=False, dropout=self.drop_prob_lm)
 
         if self.att_hid_size > 0:
@@ -24,7 +24,7 @@ class ShowAttendTellCell(nn.Module):
         else:
             raise NotImplementedError("To be implemented")
 
-    def forward(self, fc_feats, att_feats, word, state):
+    def forward(self, fc_feats, att_feats, x_t_1, state):
         batch_size = fc_feats.shape[0]
         att_size = att_feats.numel() // att_feats.shape[0] // self.att_feat_size
         att = att_feats.view(-1, self.att_feat_size)
@@ -41,7 +41,7 @@ class ShowAttendTellCell(nn.Module):
         att_feats_view = att_feats.view(-1, att_size, self.att_feat_size)
         z_t = torch.bmm(alpha_t, att_feats_view).squeeze(1)
 
-        output, state = self.rnn(z_t.unsqueeze(0), state)
+        output, state = self.rnn(torch.cat([x_t_1, z_t], dim=1).unsqueeze(0), state)
         return output.squeeze(0), state
 
 class ShowAttendTell(nn.Module):
@@ -53,12 +53,21 @@ class ShowAttendTell(nn.Module):
         self.dict_size = opt.dict_size
         self.drop_prob_lm = opt.drop_prob_lm
         self.seq_len = opt.seq_len
+        self.input_encoding_size = opt.input_encoding_size
 
         self.rnn_core = ShowAttendTellCell(opt)
         self.linear = nn.Linear(self.fc_feat_size, self.rnn_size)
-        #self.embed = nn.Embedding(self.dict_size + 1, self.input_encoding_size)
+        self.word_encoding = nn.Embedding(self.dict_size + 1, self.input_encoding_size)
         self.logit = nn.Linear(self.rnn_size, self.dict_size + 1)
         self.dropout = nn.Dropout(self.drop_prob_lm)
+
+        self.init_weights()
+
+    def init_weights(self):
+        initrange = 0.1
+        self.word_encoding.weight.data.uniform_(-initrange, initrange)
+        self.logit.bias.data.fill_(0)
+        self.logit.weight.data.uniform_(-initrange, initrange)
 
     def init_hidden(self, fc_feats):
         image_map = self.linear(fc_feats).unsqueeze(0)
@@ -71,12 +80,16 @@ class ShowAttendTell(nn.Module):
         self.rnn_core.rnn.flatten_parameters()
         state = self.init_hidden(fc_feats)
         outputs = []
-        for word in seq.split(1, dim=1):
-            if word.data.sum() == 0:
+        i_t_1 = torch.zeros_like(seq[:,0]).long()
+        for i in range(seq.shape[1]):
+            i_t = seq[:,i]
+            if i_t.data.sum() == 0:
                 break
-            output, state = self.rnn_core(fc_feats, att_feats, word, state)
+            x_t_1 = self.word_encoding(i_t_1)
+            output, state = self.rnn_core(fc_feats, att_feats, x_t_1, state)
             output = F.log_softmax(self.logit(self.dropout(output)), dim=0)
             outputs.append(output)
+            i_t_1 = i_t.long()
 
         for i in range(self.seq_len - len(outputs)):
             outputs.append(torch.zeros_like(outputs[0]))

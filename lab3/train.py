@@ -9,6 +9,7 @@ from torch.autograd import Variable
 import utils
 from coco import CocoCaptionsFeature
 from models.ShowAttendTell import ShowAttendTell
+from summary import Summary
 
 use_cuda = torch.cuda.is_available()
 opt = opts.parse_opt()
@@ -49,7 +50,12 @@ if use_cuda:
 optimizer = optim.Adam(net.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
 criterion = utils.LanguageModelCriterion()
 
+summary = Summary()
+
+iteration = 0
+
 def train():
+    global iteration
     loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (fc, att, labels) in loader:
         if use_cuda:
@@ -59,12 +65,18 @@ def train():
         outputs = net(fc, att, labels)
         loss = criterion(outputs, labels)
         loss.backward()
-        torch.nn.utils.clip_grad_value_(net.parameters(), opt.grad_clip)
+        utils.clip_grad_value_(net.parameters(), opt.grad_clip)
         optimizer.step()
 
         train_loss = loss.data[0]
 
         loader.set_description("Loss: {:.6f}".format(train_loss))
 
+        iteration += 1
+        if iteration % opt.losses_log_every == 0:
+            summary.add(iteration, 'train-loss', train_loss)
+
 for epoch in trange(opt.max_epochs, desc='Epoch', ascii=True):
     train()
+
+summary.write("csv/history.csv")
