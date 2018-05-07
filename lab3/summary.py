@@ -19,6 +19,6 @@ class Summary():
                     f.write(','.join(map(str, row_data)) + '\n')
                     row_data = [""] * (len(keys)+1)
                     row_data[0] = row
-                    row = last_row
 
+                last_row = row
                 row_data[keys.index(key) + 1] = val

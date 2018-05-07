@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 class ShowAttendTellCell(nn.Module):
     def __init__(self, opt):
@@ -8,9 +9,8 @@ class ShowAttendTellCell(nn.Module):
         self.input_encoding_size = opt.input_encoding_size
         self.rnn_type = opt.rnn_type
         self.rnn_size = opt.rnn_size
-        self.num_layers = opt.num_layers
+        # self.num_layers = opt.num_layers
         self.drop_prob_lm = opt.drop_prob_lm
-        self.fc_feat_size = opt.fc_feat_size
         self.att_feat_size = opt.att_feat_size
         self.att_hid_size = opt.att_hid_size
 
@@ -76,22 +76,75 @@ class ShowAttendTell(nn.Module):
         else:
             return image_map
 
-    def forward(self, fc_feats, att_feats, seq):
-        self.rnn_core.rnn.flatten_parameters()
+    def forward_(self, fc_feats, att_feats, seq):
         state = self.init_hidden(fc_feats)
         outputs = []
-        i_t_1 = torch.zeros_like(seq[:,0]).long()
+        i_t_1 = torch.zeros_like(seq[:,0])
         for i_t in torch.unbind(seq, dim=1):
             if i_t.data.sum() == 0:
                 break
             x_t_1 = self.word_encoding(i_t_1)
+            self.rnn_core.rnn.flatten_parameters()
             output, state = self.rnn_core(fc_feats, att_feats, x_t_1, state)
             output = F.log_softmax(self.logit(self.dropout(output)), dim=0)
             outputs.append(output)
-            i_t_1 = i_t.long()
+            i_t_1 = i_t
 
         for i in range(self.seq_len - len(outputs)):
             outputs.append(torch.zeros_like(outputs[0]))
 
         return torch.cat([o.unsqueeze(1) for o in outputs], 1)
 
+    def forward_rnn(self, fc_feats, att_feats, i_t_1, state):
+        x_t_1 = self.word_encoding(i_t_1)
+        self.rnn_core.rnn.flatten_parameters()
+        output, state = self.rnn_core(fc_feats, att_feats, x_t_1, state)
+        output = F.log_softmax(self.logit(self.dropout(output)), dim=0)
+        return output, state
+
+    def forward(self, **kwargs):
+        if not kwargs.get('seq', None) is None:
+            return self.train_(**kwargs)
+        else:
+            return self.eval_(**kwargs)
+
+    def train_(self, fc_feats, att_feats, seq):
+        state = self.init_hidden(fc_feats)
+        outputs = []
+        i_t_1 = torch.zeros_like(seq[:,0])
+        for i_t in torch.unbind(seq, dim=1):
+            if i_t.data.sum() == 0:
+                break
+            output, state = self.forward_rnn(fc_feats, att_feats, i_t_1, state)
+            outputs.append(output)
+            i_t_1 = i_t
+
+        for i in range(self.seq_len - len(outputs)):
+            outputs.append(torch.zeros_like(outputs[0]))
+
+        return torch.cat([o.unsqueeze(1) for o in outputs], 1)
+        
+    def eval_(self, fc_feats, att_feats):
+        state = self.init_hidden(fc_feats)
+        seqs = []
+        i_t_1 = fc_feats.data.new(fc_feats.shape[0]).long().zero_()
+        i_t_1 = Variable(i_t_1, requires_grad=False)
+        unfinished = torch.ones_like(i_t_1).byte()
+        for t in range(self.seq_len):
+            output, state = self.forward_rnn(fc_feats, att_feats, i_t_1, state)
+
+            i_t = torch.multinomial(output.exp(), 1).long().view(-1)
+
+            unfinished = unfinished * (i_t > 0)
+            if not unfinished.any():
+                break
+
+            seq = i_t * unfinished.type_as(i_t)
+            seqs.append(seq)
+
+            i_t_1 = i_t
+
+        for i in range(self.seq_len - len(seqs)):
+            seqs.append(torch.zeros_like(seqs[0]))
+
+        return torch.cat([o.unsqueeze(1) for o in seqs], 1)

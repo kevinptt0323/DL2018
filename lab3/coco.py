@@ -56,7 +56,7 @@ class CocoCaptionsFeature(data.Dataset):
             choice = torch.randperm(labels_origin.shape[0])[:self.seq_per_img]
             labels = labels_origin[choice]
 
-        return (fc, att, labels)
+        return (fc, att, labels, self.info['images'][index])
     
     def __len__(self):
         return len(self.info['images'])

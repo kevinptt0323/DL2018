@@ -1,4 +1,5 @@
 import opts
+import os
 from tqdm import tqdm, trange
 
 import torch
@@ -21,21 +22,7 @@ data = CocoCaptionsFeature(fc_dir=opt.input_fc_dir,
                            split=["train", "restval"],
                            opt=opt)
 
-def expand_seq_data(data):
-    _fc, _att, _labels = zip(*data)
-    seq_per_img = _labels[0].shape[0]
-    fc, att = [], []
-    for fc_item in _fc:
-        fc += [fc_item] * seq_per_img
-    for att_item in _att:
-        att += [att_item] * seq_per_img
-    fc = torch.stack(fc)
-    att = torch.stack(att)
-    labels = torch.cat(_labels)
-    return fc, att, labels
-
 trainloader = DataLoader(data, batch_size=opt.batch_size,
-                         # collate_fn=expand_seq_data,
                          num_workers=1)
 
 opt.dict_size = len(data.dictionary)
@@ -55,11 +42,12 @@ summary = Summary()
 iteration = 0
 train_loss = 0
 train_loss_iter = 0
+min_loss = 1e9
 
 def train():
-    global iteration, train_loss, train_loss_iter
+    global iteration, train_loss, train_loss_iter, min_loss
     loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
-    for batch_idx, (fc, att, labels) in loader:
+    for batch_idx, (fc, att, labels, data_info) in loader:
         if use_cuda:
             fc, att, labels = fc.cuda(), att.cuda(), labels.cuda()
         fc, att, labels = Variable(fc, requires_grad=False), Variable(att, requires_grad=False), Variable(labels, requires_grad=False)
@@ -67,8 +55,9 @@ def train():
         att = torch.stack([att]*opt.seq_per_img).view(-1, *att.shape[1:])
         labels = labels.transpose(1, 0).contiguous().view(-1, *labels.shape[2:])
 
+        labels = labels.long()
         optimizer.zero_grad()
-        outputs = net(fc, att, labels)
+        outputs = net(fc_feats=fc, att_feats=att, seq=labels)
         loss = criterion(outputs, labels)
         loss.backward()
         utils.clip_grad_value_(net.parameters(), opt.grad_clip)
@@ -76,16 +65,66 @@ def train():
 
         train_loss += loss.data[0]
         train_loss_iter += 1
+        min_loss = min(min_loss, loss.data[0])
 
-        loader.set_description("Loss: {:.6f}".format(loss.data[0]))
+        loader.set_description("Loss: {:.6f} | Min Loss: {:.6f}".format(loss.data[0], min_loss))
 
         iteration += 1
         if iteration % opt.losses_log_every == 0:
             summary.add(iteration, 'train-loss', train_loss / train_loss_iter)
+            summary.add(iteration, 'min-loss', min_loss)
             train_loss = 0
             train_loss_iter = 0
+
+    checkpoint_path = os.path.join(opt.checkpoint_path, 'model.pth')
+    optimizer_path = os.path.join(opt.checkpoint_path, 'optimizer.pth')
+    if use_cuda:
+        #torch.save(net.module.state_dict(), checkpoint_path)
+        pass
+    else:
+        #torch.save(net.state_dict(), checkpoint_path)
+        pass
+    #torch.save(optimizer.state_dict(), optimizer_path)
+
+
+def val(split="val"):
+    net.eval()
+    data_val = CocoCaptionsFeature(fc_dir=opt.input_fc_dir,
+                               att_dir=opt.input_att_dir,
+                               label_file=opt.input_label_h5,
+                               info_file=opt.input_json,
+                               split=split,
+                               opt=opt)
+    evalloader = iter(DataLoader(data_val, batch_size=opt.val_images_use, num_workers=1))
+
+    #loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
+    fc, att, labels = next(evalloader)
+
+    if use_cuda:
+        fc, att, labels = fc.cuda(), att.cuda(), labels.cuda()
+    fc, att, labels = Variable(fc, requires_grad=False), Variable(att, requires_grad=False), Variable(labels, requires_grad=False)
+    fc = torch.stack([fc]*opt.seq_per_img).view(-1, *fc.shape[1:])
+    att = torch.stack([att]*opt.seq_per_img).view(-1, *att.shape[1:])
+    labels = labels.transpose(1, 0).contiguous().view(-1, *labels.shape[2:])
+
+    labels = labels.long()
+    outputs = net(fc_feats=fc, att_feats=att)
+    #loss = criterion(outputs, labels)
+
+    txts = utils.decode_sequence(data.dictionary, outputs.data)
+    for txt in txts:
+        print(txt)
+
+    #train_loss += loss.data[0]
+    #train_loss_iter += 1
+    #min_loss = min(min_loss, loss.data[0])
+
+    net.train()
+
 
 for epoch in trange(opt.max_epochs, desc='Epoch', ascii=True):
     train()
 
-summary.write("csv/history.csv")
+# val()
+
+summary.write("csv/history5-6.csv")
