@@ -76,25 +76,6 @@ class ShowAttendTell(nn.Module):
         else:
             return image_map
 
-    def forward_(self, fc_feats, att_feats, seq):
-        state = self.init_hidden(fc_feats)
-        outputs = []
-        i_t_1 = torch.zeros_like(seq[:,0])
-        for i_t in torch.unbind(seq, dim=1):
-            if i_t.data.sum() == 0:
-                break
-            x_t_1 = self.word_encoding(i_t_1)
-            self.rnn_core.rnn.flatten_parameters()
-            output, state = self.rnn_core(fc_feats, att_feats, x_t_1, state)
-            output = F.log_softmax(self.logit(self.dropout(output)), dim=0)
-            outputs.append(output)
-            i_t_1 = i_t
-
-        for i in range(self.seq_len - len(outputs)):
-            outputs.append(torch.zeros_like(outputs[0]))
-
-        return torch.cat([o.unsqueeze(1) for o in outputs], 1)
-
     def forward_rnn(self, fc_feats, att_feats, i_t_1, state):
         x_t_1 = self.word_encoding(i_t_1)
         self.rnn_core.rnn.flatten_parameters()
