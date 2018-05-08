@@ -1,6 +1,6 @@
 import argparse
 
-def parse_opt():
+def parse_opt(args=None):
     parser = argparse.ArgumentParser()
     # Data input settings
     parser.add_argument('--input_json', type=str, default='data/coco.json',
@@ -101,7 +101,7 @@ def parse_opt():
     parser.add_argument('--train_only', type=int, default=0,
                     help='if true then use 80k, else use 110k')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     # Check if args are valid
     assert args.rnn_size > 0, "rnn_size should be greater than 0"
