@@ -46,6 +46,7 @@ min_loss = 1e9
 
 def train():
     global iteration, train_loss, train_loss_iter, min_loss
+    net.train()
     loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (fc, att, labels, data_info) in loader:
         if use_cuda:
@@ -57,7 +58,7 @@ def train():
 
         labels = labels.long()
         optimizer.zero_grad()
-        outputs = net(fc_feats=fc, att_feats=att, seq=labels)
+        outputs, *_ = net(fc_feats=fc, att_feats=att, seq=labels)
         loss = criterion(outputs, labels)
         loss.backward()
         utils.clip_grad_value_(net.parameters(), opt.grad_clip)
@@ -79,12 +80,10 @@ def train():
     checkpoint_path = os.path.join(opt.checkpoint_path, 'model.pth')
     optimizer_path = os.path.join(opt.checkpoint_path, 'optimizer.pth')
     if use_cuda:
-        #torch.save(net.module.state_dict(), checkpoint_path)
-        pass
+        torch.save(net.module.state_dict(), checkpoint_path)
     else:
-        #torch.save(net.state_dict(), checkpoint_path)
-        pass
-    #torch.save(optimizer.state_dict(), optimizer_path)
+        torch.save(net.state_dict(), checkpoint_path)
+    torch.save(optimizer.state_dict(), optimizer_path)
 
 
 def val(split="val"):
@@ -108,7 +107,7 @@ def val(split="val"):
     labels = labels.transpose(1, 0).contiguous().view(-1, *labels.shape[2:])
 
     labels = labels.long()
-    outputs = net(fc_feats=fc, att_feats=att)
+    outputs, *_ = net(fc_feats=fc, att_feats=att)
     #loss = criterion(outputs, labels)
 
     txts = utils.decode_sequence(data.dictionary, outputs.data)
@@ -118,8 +117,6 @@ def val(split="val"):
     #train_loss += loss.data[0]
     #train_loss_iter += 1
     #min_loss = min(min_loss, loss.data[0])
-
-    net.train()
 
 
 for epoch in trange(opt.max_epochs, desc='Epoch', ascii=True):

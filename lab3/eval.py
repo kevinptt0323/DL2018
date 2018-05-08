@@ -18,7 +18,7 @@ data = CocoCaptionsFeature(fc_dir=opt.input_fc_dir,
                            att_dir=opt.input_att_dir,
                            label_file=opt.input_label_h5,
                            info_file=opt.input_json,
-                           split="train",
+                           split="val",
                            opt=opt)
 
 dataloader = DataLoader(data, batch_size=opt.batch_size, num_workers=1)
@@ -50,8 +50,6 @@ def test():
 
     loader = tqdm(enumerate(dataloader), total=len(dataloader), ascii=True)
 
-    #loader = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
-
     min_loss = 1e9
 
     for batch_idx, (fc, att, labels, data_info) in loader:
@@ -60,18 +58,19 @@ def test():
         fc, att, labels = Variable(fc, requires_grad=False), Variable(att, requires_grad=False), Variable(labels, requires_grad=False)
         fc = torch.stack([fc]*opt.seq_per_img).view(-1, *fc.shape[1:])
         att = torch.stack([att]*opt.seq_per_img).view(-1, *att.shape[1:])
+        origin_labels = labels.view(-1, *labels.shape[2:])
         labels = labels.transpose(1, 0).contiguous().view(-1, *labels.shape[2:])
 
         labels = labels.long()
-        outputs = net(fc_feats=fc, att_feats=att, seq=labels)
+        outputs, _ = net(fc_feats=fc, att_feats=att, seq=labels)
         loss = criterion(outputs, labels)
 
         if loss.data[0] < min_loss:
             min_loss = loss.data[0]
 
-            outputs = net(fc_feats=fc, att_feats=att)
+            outputs, alpha = net(fc_feats=fc, att_feats=att)
             min_txts = utils.decode_sequence(data.dictionary, outputs.data)
-            min_txts_target = utils.decode_sequence(data.dictionary, labels.data)
+            min_txts_target = utils.decode_sequence(data.dictionary, origin_labels.data)
             file_path = data_info['file_path']
 
         loader.set_description("Loss: {:.6f} | Min Loss: {:.6f}".format(loss.data[0], min_loss))
@@ -81,7 +80,6 @@ def test():
 
     loader.set_description("Loss: {:.6f} | Min Loss: {:.6f}".format(loss.data[0], min_loss))
 
-    net.train()
     for idx, (txt) in enumerate(min_txts):
         if idx % opt.seq_per_img == 0:
             print(file_path[idx // opt.seq_per_img])
@@ -91,8 +89,8 @@ def test():
             print("")
 
     print(min_loss)
-
-    
+    att_path = './alpha.pt'
+    torch.save(alpha.data.cpu(), att_path)
 
 test()
 
