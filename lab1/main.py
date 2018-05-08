@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
 
 import torchvision
 import torchvision.transforms as transforms
@@ -10,9 +9,10 @@ from tqdm import tqdm
 
 def weights_init(m):
     if type(m) == nn.Conv2d:
-        nn.init.kaiming_uniform(m.weight.data)
+        nn.init.kaiming_uniform_(m.weight.data)
         
-use_cuda = torch.cuda.is_available()
+use_cuda = torch.cuda.is_available() and False
+device = torch.device('cuda' if use_cuda else 'cpu')
 
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
@@ -37,12 +37,13 @@ classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship'
 net = ResNet(BasicBlock, 3, len(classes))  # ResNet-20
 # net = ResNet(BasicBlock, 9, len(classes))  # ResNet-56
 # net = ResNet(BasicBlock, 18, len(classes)) # ResNet-110
-# net = ResNet(PreActBlock, 3, len(classes))  # ResNet-20-preact
+# NET = ResNet(PreActBlock, 3, len(classes))  # ResNet-20-preact
 # net = ResNet(PreActBlock, 9, len(classes))  # ResNet-56-preact
 # net = ResNet(PreActBlock, 18, len(classes)) # ResNet-110-preact
 
+net = net.to(device)
+
 if use_cuda:
-    net.cuda()
     net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 
 optimizer = optim.SGD(net.parameters(), lr=0.1, momentum=0.9, weight_decay=1e-4)
@@ -68,19 +69,17 @@ def train(epoch):
         lr = param_group['lr']
     progress = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (inputs, targets) in progress:
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
+        inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
-        inputs, targets = Variable(inputs), Variable(targets)
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
         optimizer.step()
 
-        train_loss += loss.data[0]
+        train_loss += loss.item()
         _, predicted = torch.max(outputs.data, 1)
         total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
+        correct += (predicted == targets).sum().item()
 
         progress.set_description('Loss: %.6f | Acc: %.3f%% (%d/%d) | LR: %g'
             % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, lr))
@@ -95,31 +94,30 @@ def test(epoch):
     correct = 0
     total = 0
     progress = tqdm(enumerate(testloader), total=len(testloader), ascii=True)
-    for batch_idx, (inputs, targets) in progress:
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
-        inputs, targets = Variable(inputs, volatile=True), Variable(targets)
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in progress:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = net(inputs)
+            loss = criterion(outputs, targets)
 
-        test_loss += loss.data[0]
-        _, predicted = torch.max(outputs.data, 1)
-        total += targets.size(0)
-        correct += predicted.eq(targets.data).cpu().sum()
+            test_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
+            total += targets.size(0)
+            correct += (predicted == targets).sum().item()
 
-        progress.set_description('Loss: %.6f | Acc: %.3f%% (%d/%d)'
-            % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
+            progress.set_description('Loss: %.6f | Acc: %.3f%% (%d/%d)'
+                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total))
 
-    # Save checkpoint.
-    result['test-loss'].append(test_loss/(batch_idx+1))
-    result['test-acc'].append(1.*correct/total)
+        # Save checkpoint.
+        result['test-loss'].append(test_loss/(batch_idx+1))
+        result['test-acc'].append(1.*correct/total)
     
 for epoch in tqdm(range(164), desc='Epoch', ascii=True):
     scheduler.step()
     train(epoch)
     test(epoch)
 
-with open('csv/resnet-20.csv', 'w') as f:
+with open('csv/resnet-20-test.csv', 'w') as f:
     f.write('epoch,train-loss,train-acc,test-loss,test-acc\n')
     for idx, arr in enumerate(zip(result['train-loss'], result['train-acc'], result['test-loss'], result['test-acc'])):
         f.write('%d,%s\n' % (idx, ','.join(map(str, arr))))
