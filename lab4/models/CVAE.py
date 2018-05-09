@@ -16,17 +16,17 @@ class Encoder(nn.Module):
         self.data_shape = data_shape
         self.data_size = data_size
 
-        self.conv11 = nn.Conv2d(in_channel + label_len, 1, kernel_size=3, stride=1, padding=1, bias=bias)
+        self.conv = nn.Conv2d(in_channel + label_len, 1, kernel_size=3, stride=1, padding=1, bias=bias)
         self.fc = nn.Linear(data_size, hid_size, bias=bias)
         self.fc_mean = nn.Linear(hid_size, latent_size, bias=bias)
         self.fc_logvar = nn.Linear(hid_size, latent_size, bias=bias)
 
     def forward(self, x, onehot):
-        onehot = torch.stack([onehot] * self.data_size, 2).view(*onehot.shape, *self.data_shape)
+        onehot = onehot.unsqueeze(2).unsqueeze(3).expand(-1, -1, *self.data_shape)
         x = torch.cat([x, onehot], dim=1)
-        out = F.relu(self.conv11(x))
+        out = F.leaky_relu(self.conv(x))
         out = out.view(-1, self.data_size)
-        out = F.relu(self.fc(out))
+        out = F.leaky_relu(self.fc(out))
         return self.fc_mean(out), self.fc_logvar(out)
 
 class Decoder(nn.Module):
@@ -44,7 +44,7 @@ class Decoder(nn.Module):
 
     def forward(self, z, onehot):
         x = torch.cat([z, onehot], dim=1)
-        out = F.relu(self.fc(x))
+        out = F.leaky_relu(self.fc(x))
         out = out.view(-1, 2, self.data_shape[0] // 2, self.data_shape[1] // 2)
         out = F.relu(self.conv1(out))
         out = self.upsample(out)

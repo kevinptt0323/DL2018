@@ -16,8 +16,6 @@ data_size = 28 * 28
 
 net = CVAE(1, data_shape, data_size, 20, 400, 10)
 net = net.to(device)
-if use_cuda:
-    net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 
 state_dict = torch.load('data/model2.pth')
 net.load_state_dict(state_dict)
@@ -28,9 +26,9 @@ iteration = 0
 def test():
     net.eval()
     noise = torch.rand(10, 20).to(device)
-    label = torch.LongTensor(range(10)).to(device)
+    label = torch.arange(0, 10).to(device)
     onehot = OneHot(label, 10)
-    outputs = net.module.decoder(noise, onehot)
+    outputs = net.decoder(noise, onehot)
     
 for epoch in trange(100, desc='Epoch', ascii=True):
     test()

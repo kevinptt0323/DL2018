@@ -26,9 +26,6 @@ net = CVAE(1, data_shape, data_size, 20, 400, 10)
 
 net = net.to(device)
 
-if use_cuda:
-    net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-
 optimizer = optim.Adam(net.parameters(), lr=1e-3)
 summary = Summary()
 iteration = 0
@@ -40,9 +37,11 @@ def train():
     progress = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (inputs, targets) in progress:
         inputs, targets = inputs.to(device), targets.to(device)
+        outputs, mean, logvar = net(inputs, targets)
+        MSE = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
+        KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+        loss = MSE + KLD
         optimizer.zero_grad()
-        outputs, *_ = net(inputs, targets)
-        loss = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
         loss.backward()
         optimizer.step()
 
