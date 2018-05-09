@@ -32,9 +32,10 @@ if use_cuda:
 optimizer = optim.Adam(net.parameters(), lr=1e-3)
 summary = Summary()
 iteration = 0
+min_loss = 1e9
 
 def train():
-    global iteration
+    global iteration, min_loss
     net.train()
     progress = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (inputs, targets) in progress:
@@ -46,13 +47,16 @@ def train():
         optimizer.step()
 
         progress.set_description('Loss: %.6f' % loss.item())
+        min_loss = min(min_loss, loss.item())
 
         iteration += 1
         if iteration % 50 == 0:
             summary.add(iteration, 'loss', loss.item())
-    
-for epoch in trange(100, desc='Epoch', ascii=True):
+
+epochs = trange(100, desc='Epoch', ascii=True)
+for epoch in epochs:
     train()
+    epochs.set_description('Loss: %.6f' % min_loss)
 
 summary.write("csv/history2.csv")
 

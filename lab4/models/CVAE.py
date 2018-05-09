@@ -24,7 +24,7 @@ class Encoder(nn.Module):
     def forward(self, x, onehot):
         onehot = torch.stack([onehot] * self.data_size, 2).view(*onehot.shape, *self.data_shape)
         x = torch.cat([x, onehot], dim=1)
-        out = self.conv11(x)
+        out = F.relu(self.conv11(x))
         out = out.view(-1, self.data_size)
         out = F.relu(self.fc(out))
         return self.fc_mean(out), self.fc_logvar(out)
