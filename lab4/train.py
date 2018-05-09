@@ -8,7 +8,7 @@ import torchvision.transforms as transforms
 from tqdm import tqdm, trange
 import os
 
-from models.CVAE import CVAE
+from models import CVAE
 from summary import Summary
 
 use_cuda = torch.cuda.is_available()
@@ -22,13 +22,12 @@ trainloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True,
 data_shape = dataset[0][0].shape[1:]
 data_size = dataset[0][0].numel()
 
-net = CVAE(1, data_shape, data_size, 400, 20, 10)
+net = CVAE(1, data_shape, data_size, 20, 400, 10)
 
 net = net.to(device)
 
 if use_cuda:
-    # net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-    pass
+    net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 
 optimizer = optim.Adam(net.parameters(), lr=1e-3)
 summary = Summary()
