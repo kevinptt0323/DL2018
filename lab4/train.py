@@ -17,7 +17,7 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 transform = transforms.ToTensor()
 
 dataset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=2)
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
 
 data_shape = dataset[0][0].shape[1:]
 data_size = dataset[0][0].numel()
@@ -41,7 +41,7 @@ def train():
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs, *_ = net(inputs, targets)
-        loss = F.mse_loss(outputs, inputs.view(-1, data_size), size_average=False)
+        loss = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
         loss.backward()
         optimizer.step()
 
@@ -54,7 +54,7 @@ def train():
 for epoch in trange(100, desc='Epoch', ascii=True):
     train()
 
-summary.write("csv/history1.csv")
+summary.write("csv/history2.csv")
 
-model_path = os.path.join('data/model1.pth')
-torch.save(net.to(torch.device('cpu')).state_dict(), model_path)
+model_path = os.path.join('data/model2.pth')
+torch.save(net.state_dict(), model_path)

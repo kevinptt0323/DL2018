@@ -19,7 +19,7 @@ net = net.to(device)
 if use_cuda:
     net = torch.nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
 
-state_dict = torch.load('data/model1.pth')
+state_dict = torch.load('data/model2.pth')
 net.load_state_dict(state_dict)
 
 summary = Summary()
@@ -30,7 +30,7 @@ def test():
     noise = torch.rand(10, 20).to(device)
     label = torch.LongTensor(range(10)).to(device)
     onehot = OneHot(label, 10)
-    outputs, *_ = net.module.decoder(noise, onehot)
+    outputs = net.module.decoder(noise, onehot)
     
 for epoch in trange(100, desc='Epoch', ascii=True):
     test()
