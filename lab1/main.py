@@ -11,7 +11,7 @@ def weights_init(m):
     if type(m) == nn.Conv2d:
         nn.init.kaiming_uniform_(m.weight.data)
         
-use_cuda = torch.cuda.is_available() and False
+use_cuda = torch.cuda.is_available()
 device = torch.device('cuda' if use_cuda else 'cpu')
 
 transform_train = transforms.Compose([
