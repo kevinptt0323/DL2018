@@ -45,12 +45,14 @@ def train():
         loss.backward()
         optimizer.step()
 
-        progress.set_description('Loss: %.6f' % loss.item())
-        min_loss = min(min_loss, loss.item())
+        loss_val = loss.item() / inputs.shape[0]
+
+        progress.set_description('Loss: %.6f' % loss_val)
+        min_loss = min(min_loss, loss_val)
 
         iteration += 1
         if iteration % 50 == 0:
-            summary.add(iteration, 'loss', loss.item())
+            summary.add(iteration, 'loss', loss_val)
 
 epochs = trange(100, desc='Epoch', ascii=True)
 for epoch in epochs:
