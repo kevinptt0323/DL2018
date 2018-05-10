@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('Agg')
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -7,8 +9,10 @@ import torchvision
 import torchvision.transforms as transforms
 from tqdm import tqdm, trange
 import os
+import matplotlib.pyplot as plt
+import time
 
-from models import CVAE
+from models import CVAE, OneHot
 from summary import Summary
 
 use_cuda = torch.cuda.is_available()
@@ -38,9 +42,11 @@ def train():
     for batch_idx, (inputs, targets) in progress:
         inputs, targets = inputs.to(device), targets.to(device)
         outputs, mean, logvar = net(inputs, targets)
+
         MSE = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
         KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
         loss = MSE + KLD
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -54,12 +60,40 @@ def train():
         if iteration % 50 == 0:
             summary.add(iteration, 'loss', loss_val)
 
+    return loss_val
+
+def test():
+    net.eval()
+
+    plt.figure(figsize=(5,10))
+    noise = torch.rand(10, 20).to(device)
+    label = torch.arange(10, dtype=torch.long).to(device)
+    onehot = OneHot(label, 10)
+    outputs = net.decoder(noise, onehot)
+    for p in range(10):
+        plt.subplot(5,2,p+1)
+        plt.text(0,0,"label=%i"%label[p].item(), color='black', backgroundcolor='white', fontsize=8)
+        plt.imshow(outputs[p].view(28,28).data.cpu().numpy(), cmap='gray')
+        plt.axis('off')
+
+    fig_root = './data/fig'
+
+    if not os.path.exists(os.path.join(fig_root, str(ts))):
+        os.makedirs(os.path.join(fig_root, str(ts)))
+
+    plt.savefig(os.path.join(fig_root, str(ts), "%i.png"%epoch), dpi=300)
+    plt.clf()
+    plt.close()
+
+ts = int(time.time())
 epochs = trange(100, desc='Epoch', ascii=True)
 for epoch in epochs:
-    train()
-    epochs.set_description('Loss: %.6f' % min_loss)
+    train_loss = train()
+    epochs.set_description('Loss: %.6f' % train_loss)
+    if (epoch + 1) % 10 == 0:
+        test()
 
-summary.write("csv/history2.csv")
+summary.write("csv/history1.csv")
 
-model_path = os.path.join('data/model2.pth')
+model_path = os.path.join('data/model/model1.pth')
 torch.save(net.state_dict(), model_path)
