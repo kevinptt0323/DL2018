@@ -24,9 +24,9 @@ class Encoder(nn.Module):
     def forward(self, x, onehot):
         onehot = onehot.unsqueeze(2).unsqueeze(3).expand(-1, -1, *self.data_shape)
         x = torch.cat([x, onehot], dim=1)
-        out = F.leaky_relu(self.conv(x))
+        out = F.relu(self.conv(x))
         out = out.view(-1, self.data_size)
-        out = F.leaky_relu(self.fc(out))
+        out = F.relu(self.fc(out))
         return self.fc_mean(out), self.fc_logvar(out)
 
 class Decoder(nn.Module):
@@ -39,17 +39,17 @@ class Decoder(nn.Module):
         self.upsample = nn.Upsample(scale_factor=2)
 
         self.conv1 = nn.Conv2d(2, label_len+1, kernel_size=3, stride=1, padding=1, bias=bias)
-        self.conv2 = nn.Conv2d(label_len+1, 1, kernel_size=3, stride=1, padding=1, bias=bias)
-        # self.conv3 = nn.Conv2d(3, 1, kernel_size=3, stride=1, padding=1, bias=bias)
+        self.conv2 = nn.Conv2d(label_len+1, 3, kernel_size=3, stride=1, padding=1, bias=bias)
+        self.conv3 = nn.Conv2d(3, 1, kernel_size=3, stride=1, padding=1, bias=bias)
 
     def forward(self, z, onehot):
         x = torch.cat([z, onehot], dim=1)
-        out = F.leaky_relu(self.fc(x))
+        out = F.relu(self.fc(x))
         out = out.view(-1, 2, self.data_shape[0] // 2, self.data_shape[1] // 2)
         out = F.relu(self.conv1(out))
         out = self.upsample(out)
         out = F.relu(self.conv2(out))
-        # out = F.sigmoid(self.conv3(out))
+        out = F.relu(self.conv3(out))
         return out
 
 class CVAE(nn.Module):
