@@ -9,11 +9,36 @@ import torchvision
 import torchvision.transforms as transforms
 from tqdm import tqdm, trange
 import os
+import argparse
 import matplotlib.pyplot as plt
 import time
 
 from models import CVAE, OneHot
 from summary import Summary
+
+def get_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=int, default=128,
+                    help='minibatch size')
+    parser.add_argument('--learning_rate', type=float, default=1e-3,
+                    help='learning rate')
+    parser.add_argument('--epoch', type=int, default=100,
+                    help='number of epochs')
+    parser.add_argument('--model_path', type=str, default=None,
+                    help='filename to model')
+    parser.add_argument('--history_path', type=str, default=None,
+                    help='filename to history')
+    parser.add_argument('--eval_epoch', type=int, default=0,
+                    help='evaluate every <EVAL_EPOCH> epochs')
+
+    return parser
+
+def parse_opt(args=None):
+    parser = get_parser()
+    opt = parser.parse_args(args)
+    return opt
+
+opt = parse_opt()
 
 use_cuda = torch.cuda.is_available()
 device = torch.device('cuda' if use_cuda else 'cpu')
@@ -21,7 +46,7 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 transform = transforms.ToTensor()
 
 dataset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-trainloader = torch.utils.data.DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=True, num_workers=4)
 
 data_shape = dataset[0][0].shape[1:]
 data_size = dataset[0][0].numel()
@@ -30,22 +55,24 @@ net = CVAE(1, data_shape, data_size, 20, 400, 10)
 
 net = net.to(device)
 
-optimizer = optim.Adam(net.parameters(), lr=1e-3)
+optimizer = optim.Adam(net.parameters(), lr=opt.learning_rate)
 summary = Summary()
 iteration = 0
-min_loss = 1e9
+
+def loss_fn(inputs, outputs, mean, logvar):
+    MSE = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
+    KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+    return MSE + KLD
 
 def train():
-    global iteration, min_loss
+    global iteration
     net.train()
     progress = tqdm(enumerate(trainloader), total=len(trainloader), ascii=True)
     for batch_idx, (inputs, targets) in progress:
         inputs, targets = inputs.to(device), targets.to(device)
         outputs, mean, logvar = net(inputs, targets)
 
-        MSE = F.mse_loss(outputs.view(-1, data_size), inputs.view(-1, data_size), size_average=False)
-        KLD = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
-        loss = MSE + KLD
+        loss = loss_fn(inputs, outputs, mean, logvar)
 
         optimizer.zero_grad()
         loss.backward()
@@ -54,11 +81,11 @@ def train():
         loss_val = loss.item() / inputs.shape[0]
 
         progress.set_description('Loss: %.6f' % loss_val)
-        min_loss = min(min_loss, loss_val)
 
         iteration += 1
-        if iteration % 50 == 0:
-            summary.add(iteration, 'loss', loss_val)
+        if iteration % 1000 == 0 or iteration == 1:
+            i = 0 if iteration == 1 else iteration
+            summary.add(i, 'loss', loss_val)
 
     return loss_val
 
@@ -86,14 +113,16 @@ def test():
     plt.close()
 
 ts = int(time.time())
-epochs = trange(100, desc='Epoch', ascii=True)
+epochs = trange(opt.epoch, desc='Epoch', ascii=True)
 for epoch in epochs:
     train_loss = train()
     epochs.set_description('Loss: %.6f' % train_loss)
-    if (epoch + 1) % 10 == 0:
+    if opt.eval_epoch > 0 and (epoch + 1) % opt.eval_epoch == 0:
         test()
 
-summary.write("csv/history1.csv")
+if opt.history_path:
+    summary.write(opt.history_path)
 
-model_path = os.path.join('data/model/model1.pth')
-torch.save(net.state_dict(), model_path)
+if opt.model_path:
+    model_path = os.path.join(opt.model_path)
+    torch.save(net.state_dict(), model_path)
