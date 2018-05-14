@@ -45,7 +45,7 @@ device = torch.device('cuda' if use_cuda else 'cpu')
 
 transform = transforms.ToTensor()
 
-dataset = torchvision.datasets.MNIST(root='./data', train=True, download=True, transform=transform)
+dataset = torchvision.datasets.MNIST(root='../data', train=True, download=True, transform=transform)
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batch_size, shuffle=True, num_workers=4)
 
 data_shape = dataset[0][0].shape[1:]
