@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 
 
-fig = plt.figure(figsize = (8, 4))
+fig = plt.figure(figsize = (6, 4))
 
 filenames = [
     # 'csv/decoder-fc-only.csv',
@@ -23,7 +23,7 @@ for filename in filenames:
     tmp = np.loadtxt(filename, delimiter=',', dtype=str)
     labels = tmp[0,:]
     data = tmp[1:,:].astype(np.float)
-    # max_x = data[1:,0].max()
+    max_x = data[1:,0].max()
 
     for i in range(1, data.shape[1]):
         x, y = data[1:,0], data[1:,i]
@@ -31,12 +31,13 @@ for filename in filenames:
         yinterp = np.interp(xvals, x, y)
         fx = interpolate.interp1d(xvals, yinterp, kind='cubic')
         # plt.plot(x, y, '--', label=labels[i])
-        plt.plot(x, fx(x), '-', label=filename + ' - ' + labels[i])
+        # plt.plot(x, fx(x), '-', label=filename + ' - ' + labels[i])
+        plt.plot(x / max_x * 100, fx(x), '-', label=labels[i])
     
 plt.legend(bbox_to_anchor=(0.95, 0.95), loc=1, borderaxespad=0.)
 # plt.xscale("log")
 plt.grid(True, axis='y')
 plt.title('Train Loss')
-plt.xlabel('Iteration')
+plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.savefig('data/loss.png')
