@@ -11,7 +11,6 @@ from tqdm import tqdm, trange
 import os
 import argparse
 import matplotlib.pyplot as plt
-import time
 
 from models import Generator, Discriminator, OneHot
 from summary import Summary
@@ -26,10 +25,8 @@ def get_parser():
                     help='learning rate of discriminator')
     parser.add_argument('--epoch', type=int, default=100,
                     help='number of epochs')
-    parser.add_argument('--model_path', type=str, default=None,
-                    help='filename to model')
-    parser.add_argument('--history_path', type=str, default=None,
-                    help='filename to history')
+    parser.add_argument('--name', type=str, default=None,
+                    help='name to current training process')
     parser.add_argument('--eval_epoch', type=int, default=0,
                     help='evaluate every <EVAL_EPOCH> epochs')
     parser.add_argument('--z_size', type=int, default=64, help='latent z size')
@@ -42,15 +39,16 @@ def get_parser():
 def parse_opt(args=None):
     parser = get_parser()
     opt = parser.parse_args(args)
+    assert opt.name is None or opt.eval_epoch > 0, "Should use --name flag along with --eval_epoch"
     return opt
 
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(1.0, 0.02)
-        m.bias.data.fill_(0)
+    # elif classname.find('BatchNorm') != -1:
+    #     m.weight.data.normal_(1.0, 0.02)
+    #     m.bias.data.fill_(0.1)
 
 opt = parse_opt()
 
@@ -79,11 +77,16 @@ fixed_noise = torch.randn(opt.batch_size, opt.z_size, 1, 1, device=device)
 real_label = 1
 fake_label = 0
 
-optimizerD = optim.Adam([{'params':netD.main.parameters()}, {'params':netD.D.parameters()}], lr=opt.lr_d, betas=(opt.beta1, 0.999))
-optimizerG = optim.Adam([{'params':netG.main.parameters()}, {'params':netD.Q.parameters()}], lr=opt.lr_g, betas=(opt.beta1, 0.999))
+optimizerD = optim.Adam(list(netD.main.parameters()) + list(netD.D.parameters()), lr=opt.lr_d, betas=(opt.beta1, 0.999))
+optimizerG = optim.Adam(list(netG.main.parameters()) + list(netD.Q.parameters()), lr=opt.lr_g, betas=(opt.beta1, 0.999))
 
 iteration = 0
 summary = Summary()
+output_dir = None
+if opt.name:
+    output_dir = os.path.join('data', opt.name)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
 def train():
     global iteration
@@ -94,7 +97,7 @@ def train():
         # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
         # train with real
         inputs = inputs.to(device)
-        netD.zero_grad()
+        optimizerD.zero_grad()
         batch_size = inputs.shape[0]
         label = torch.full((batch_size,), real_label, device=device)
 
@@ -121,7 +124,7 @@ def train():
         optimizerD.step()
 
         # (2) Update G network: maximize log(D(G(z)))
-        netG.zero_grad()
+        optimizerG.zero_grad()
         label.fill_(real_label)  # fake labels are real for generator cost
         output, output_q = netD(fake)
         lossG_reconstruct = crit_bce(output, label)
@@ -131,14 +134,18 @@ def train():
         D_G_z2 = output.mean().item()
         optimizerG.step()
 
-        progress.set_description('lossD: {:6f} lossG: {:6f}' \
-                                 .format(lossD.item(), lossG.item()))
+        progress.set_description('lossD: {:6f} ({:6f} {:6f}) lossG: {:6f} ({:6f} {:6f})' \
+                                 .format(lossD.item(), lossD_real.item(), lossD_fake.item(),
+                                         lossG.item(), lossG_reconstruct.item(), lossG_mi.item()))
 
         iteration += 1
         if iteration % 100 == 0 or iteration == 1:
             i = 0 if iteration == 1 else iteration
             summary.add(i, 'lossD', lossD.item())
             summary.add(i, 'lossG', lossG.item())
+        # if iteration % 100 == 0 or iteration == 1:
+        #     print(F.softmax(output_q[0], dim=0))
+        #     print(label_c[0])
 
 def test():
     netG.eval()
@@ -161,30 +168,22 @@ def test():
             axx.axis('off')
             axx.imshow(img, cmap='gray')
 
-        fig_root = './data/fig'
-
-        if not os.path.exists(os.path.join(fig_root, str(ts))):
-            os.makedirs(os.path.join(fig_root, str(ts)))
-
-        plt.savefig(os.path.join(fig_root, str(ts), "%i.png" % epoch))
+        fig_dir = os.path.join(output_dir, 'fig')
+        if not os.path.exists(fig_dir):
+            os.makedirs(fig_dir)
+        plt.savefig(os.path.join(fig_dir, '%i.png' % epoch))
         plt.clf()
         plt.close()
 
-ts = int(time.time())
-print('start at :', ts)
 epochs = trange(opt.epoch, desc='Epoch', ascii=True)
 for epoch in epochs:
     train()
-    if opt.eval_epoch > 0 and (epoch + 1) % opt.eval_epoch == 0:
+    if output_dir and opt.eval_epoch > 0 and (epoch + 1) % opt.eval_epoch == 0:
         test()
 
-if opt.history_path:
-    summary.write(opt.history_path)
-
-if opt.model_path:
-    if not os.path.exists(opt.model_path):
-        os.makedirs(opt.model_path)
-    netG_path = os.path.join(opt.model_path, 'netG.pth')
-    netD_path = os.path.join(opt.model_path, 'netD.pth')
+if output_dir:
+    summary.write(os.path.join(output_dir, 'result.csv'))
+    netG_path = os.path.join(output_dir, 'netG.pth')
+    netD_path = os.path.join(output_dir, 'netD.pth')
     torch.save(netG.state_dict(), netG_path)
     torch.save(netD.state_dict(), netD_path)
