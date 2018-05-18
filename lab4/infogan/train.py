@@ -46,9 +46,9 @@ def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
         m.weight.data.normal_(0.0, 0.02)
-    # elif classname.find('BatchNorm') != -1:
-    #     m.weight.data.normal_(1.0, 0.02)
-    #     m.bias.data.fill_(0.1)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(0.0, 1)
+        m.bias.data.fill_(0)
 
 opt = parse_opt()
 
@@ -77,8 +77,8 @@ fixed_noise = torch.randn(opt.batch_size, opt.z_size, 1, 1, device=device)
 real_label = 1
 fake_label = 0
 
-optimizerD = optim.Adam(list(netD.main.parameters()) + list(netD.D.parameters()), lr=opt.lr_d, betas=(opt.beta1, 0.999))
-optimizerG = optim.Adam(list(netG.main.parameters()) + list(netD.Q.parameters()), lr=opt.lr_g, betas=(opt.beta1, 0.999))
+optimizerD = optim.Adam(netD.parameters(), lr=opt.lr_d, betas=(opt.beta1, 0.999))
+optimizerG = optim.Adam(list(netG.parameters()) + list(netD.Q.parameters()), lr=opt.lr_g, betas=(opt.beta1, 0.999))
 
 iteration = 0
 summary = Summary()
@@ -149,6 +149,7 @@ def train():
 
 def test():
     netG.eval()
+    netD.eval()
     with torch.no_grad():
         plt.figure(figsize=(5,10))
         noise = torch.rand(c_size, opt.z_size - c_size, device=device)
