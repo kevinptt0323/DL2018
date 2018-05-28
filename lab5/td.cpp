@@ -653,14 +653,37 @@ public:
 	}
 
 	/**
-	 * accumulate the total value of given state
+	 * accumulate the total value of given state (before)
 	 */
-	float estimate(const board& b) const {
+	float estimate_before(const board& b) const {
 		debug << "estimate " << std::endl << b;
 		float value = 0;
 		for (feature* feat : feats) {
 			value += feat->estimate(b);
 		}
+		return value;
+	}
+
+	/**
+	 * accumulate the total value of given state (after)
+	 */
+	float estimate(const board& b) const {
+		debug << "estimate " << std::endl << b;
+		float value = 0;
+		int num = 0;
+		board b1 = b, b2 = b;
+		for (int i = 0; i < 16; i++) {
+			if (b.at(i) == 0) {
+				num++;
+				b1.set(i, 1);
+				b2.set(i, 2);
+				value += 0.9 * estimate_before(b1) + 0.1 * estimate_before(b2);
+				b1.set(i, 0);
+				b2.set(i, 0);
+			}
+		}
+		if (num)
+			value /= num;
 		return value;
 	}
 
@@ -723,9 +746,9 @@ public:
 		float exact = 0;
 		for (path.pop_back() /* terminal state */; path.size(); path.pop_back()) {
 			state& move = path.back();
-			float error = exact - (move.value() - move.reward());
-			debug << "update error = " << error << " for after state" << std::endl << move.after_state();
-			exact = move.reward() + update(move.after_state(), alpha * error);
+			float error = exact + move.reward() - estimate_before(move.before_state());
+			debug << "update error = " << error << " for before state" << std::endl << move.before_state();
+			exact = update(move.before_state(), alpha * error);
 		}
 	}
 
@@ -843,7 +866,7 @@ private:
 
 int main(int argc, const char* argv[]) {
 	info << "TDL2048-Demo" << std::endl;
-	fout.open("td-after.csv", std::ofstream::out);
+	fout.open("td.csv", std::ofstream::out);
 	learning tdl;
 
 	// set the learning parameters
