@@ -1,4 +1,10 @@
-all:
-	g++ -std=c++14 -O3 -g -Wall -fmessage-length=0 -o td-after td-after.cpp 
+CXX = g++
+CXXFLAGS = -std=c++14 -O3 -g -Wall -fmessage-length=0
+OBJ = td-after td
+
+all: $(OBJ)
+
+$(OBJ): %:%.cpp
+	$(CXX) $(CXXFLAGS) -o $@ $<
 clean:
-	rm rd-after
+	rm $(OBJ)
