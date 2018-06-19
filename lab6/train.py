@@ -42,7 +42,7 @@ def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
         m.weight.data.normal_(0.0, 1)
-        m.bias.data.fill_(0.01)
+        m.bias.data.fill_(0)
 
 def main():
     opt = parse_opt()
@@ -54,13 +54,15 @@ def main():
     agent.network.apply(weights_init)
     agent.sync_weight()
     
-    progress = trange(opt.episode)
+    progress = trange(opt.episode, ascii=True)
     summary = Summary()
     last_rewards = 0
 
     for episode in progress:
+        # Training
         state = env.reset()
         for s in range(opt.max_step):
+            # use epsilon-greedy in training
             action = agent.egreedy_action(state)
             next_state, reward, done, _ = env.step(action)
             loss = agent.perceive(state, action, reward, next_state, done)
@@ -70,9 +72,10 @@ def main():
 
         summary.add(episode, 'loss', loss)
 
+        # Testing
         if opt.test_interval > 0 and (episode+1) % opt.test_interval == 0:
             rewards = 0
-            for t in range(opt.test):
+            for t in trange(opt.test, ascii=True, leave=False):
                 state = env.reset()
                 for s in range(opt.max_step):
                     action = agent.action(state)

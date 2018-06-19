@@ -5,13 +5,15 @@ import torch.optim as optim
 import random
 
 class ReplayMemory(object):
+    """
+    A cyclic list to store experience replay
+    """
     def __init__(self, capacity):
         self.capacity = capacity
         self.memory = []
         self.position = 0
 
     def append(self, data):
-        """Saves a transition."""
         if len(self.memory) < self.capacity:
             self.memory.append(None)
         self.memory[self.position] = data 
@@ -24,6 +26,9 @@ class ReplayMemory(object):
         return len(self.memory)
 
 class MLP(nn.Module):
+    """
+    Core network for DQN
+    """
     def __init__(self, input_size, output_size, bias=True):
         super(MLP, self).__init__()
         self.fc1 = nn.Linear(input_size, 32, bias=bias)
@@ -69,11 +74,13 @@ class DQN():
         else:
             result = self.action(state)
 
+        # epsilon decays
         self.epsilon = max(self.epsilon * 0.995, 0.1)
 
         return result
 
     def perceive(self, state, action, reward, next_state, done):
+        # add to experience replay memory
         self.memory.append((state, action, reward, next_state, done))
         loss = 0
 
@@ -93,6 +100,7 @@ class DQN():
 
             input = torch.tensor(list(next_state), device=self.device, dtype=torch.float)
             targets = self.network_fixed(input)
+            # target adds q-value if done == 0
             targets = reward + (1 - done) * targets.max(dim=1)[0] * self.gamma
 
         input = torch.tensor(list(state), device=self.device, dtype=torch.float)
@@ -105,7 +113,8 @@ class DQN():
         self.optimizer.step()
 
         self.train_counter += 1
-        if self.train_counter % self.update_interval == 0:
+        # update fixed Q-target
+        if self.update_interval > 0 and self.train_counter % self.update_interval == 0:
             self.sync_weight()
 
         return loss.item()
