@@ -1,6 +1,7 @@
 import argparse
 import gym
 import torch
+import random
 from tqdm import trange
 
 from models import DQN
@@ -49,6 +50,12 @@ def main():
     use_cuda = torch.cuda.is_available()
     device = torch.device('cuda' if use_cuda else 'cpu')
     env = gym.make(game)
+
+    seed = 7122
+    env.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
     agent = DQN(env, opt, device=device)
     agent.network.apply(weights_init)
