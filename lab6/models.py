@@ -8,23 +8,34 @@ class ReplayMemory(object):
     """
     A cyclic list to store experience replay
     """
-    def __init__(self, capacity):
+    def __init__(self, capacity, width):
         self.capacity = capacity
-        self.memory = []
+        self.width = width
+        self.memory = [None] * width
         self.position = 0
+        self.length = 0
 
-    def append(self, data):
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = data 
+    def append(self, data, clone=False):
+        if len(self) == 0:
+            for idx, d in enumerate(data):
+                self.memory[idx] = \
+                    torch.empty(self.capacity, *d.shape,
+                                dtype=d.dtype,
+                                device=d.device,
+                                requires_grad=d.requires_grad)
+
+        for idx, d in enumerate(data):
+            self.memory[idx][self.position] = d.clone() if clone else d
+
+        self.length = min(self.length + 1, self.capacity)
         self.position = (self.position + 1) % self.capacity
 
     def sample(self, batch_size):
-        idx = random.sample(range(len(self.memory)), batch_size)
-        return [self.memory[i] for i in idx]
+        idx = random.sample(range(len(self)), batch_size)
+        return [m[idx] for m in self.memory]
 
     def __len__(self):
-        return len(self.memory)
+        return self.length
 
 class MLP(nn.Module):
     """
@@ -44,7 +55,7 @@ class DQN():
     def __init__(self, env, opt, device=torch.device('cpu')):
         self.env = env
         self.device = device
-        self.memory = ReplayMemory(opt.replay_size)
+        self.memory = ReplayMemory(opt.replay_size, 5)
         self.epsilon = 1
         self.gamma = opt.gamma
         self.update_interval = opt.update_interval
@@ -81,6 +92,12 @@ class DQN():
         return result
 
     def perceive(self, state, action, reward, next_state, done):
+        state = torch.tensor(state, device=self.device, dtype=torch.float)
+        action = torch.tensor(action, device=self.device, dtype=torch.long)
+        reward = torch.tensor(reward, device=self.device, dtype=torch.float)
+        next_state = torch.tensor(next_state, device=self.device, dtype=torch.float)
+        done = torch.tensor(done, device=self.device, dtype=torch.float)
+
         # add to experience replay memory
         self.memory.append((state, action, reward, next_state, done))
         loss = 0
@@ -91,20 +108,15 @@ class DQN():
         return loss
 
     def train_network(self):
-        minibatch = self.memory.sample(self.batch_size)
-        state, action, reward, next_state, done = zip(*minibatch)
+        state, action, reward, next_state, done = self.memory.sample(self.batch_size)
 
         with torch.no_grad():
-            action = torch.tensor(list(action), device=self.device, dtype=torch.long)
-            reward = torch.tensor(list(reward), device=self.device)
-            done = torch.tensor(list(done), device=self.device, dtype=torch.float)
-
-            input = torch.tensor(list(next_state), device=self.device, dtype=torch.float)
-            targets = self.network_fixed(input)
+            input = next_state.to(self.device)
+            targets = self.network_fixed(next_state)
             # target adds q-value if done == 0
             targets = reward + (1 - done) * targets.max(dim=1)[0] * self.gamma
 
-        input = torch.tensor(list(state), device=self.device, dtype=torch.float)
+        input = state.to(self.device)
         output = self.network(input)
         output = output.gather(1, action.unsqueeze(1)).squeeze(1)
 
